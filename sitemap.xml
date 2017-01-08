@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <url>
+    <loc>http://valarmorghulis.io/tech/201701-mongodb-join-query-with-aggregate/</loc>
+    <lastmod>2017-01-09T02:13:59+08:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>http://valarmorghulis.io/tags/mongodb/</loc>
+    <lastmod>2017-01-09T02:13:59+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>http://valarmorghulis.io/tags/</loc>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>http://valarmorghulis.io/tech/</loc>
+    <lastmod>2017-01-09T02:13:59+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>http://valarmorghulis.io/</loc>
+    <lastmod>2017-01-09T02:13:59+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+</urlset>

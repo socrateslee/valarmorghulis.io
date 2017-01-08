@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="theme" content="darksimplicity">
+  <meta name="generator" content="Hugo 0.18.1" />
+  
+  
+  <base href="http://valarmorghulis.io/">
+  <title>Mongodb(via MongoEngine) join query with aggregate</title>
+  
+  <link rel="stylesheet" href="/css/style.min.css">
+
+</head>
+<body>
+  <div class="wrap">
+    <div class="navbar">
+        <ul class="navbar-list" style="float:right">
+          
+        </ul>
+    </div>
+    <div class="header"><span style="font-size: 34px;">
+      <a href="http://valarmorghulis.io/">ValarMorghulis.IO</a></span>
+      </div>
+
+<div class="empty">&nbsp;</div>
+  <div class="post-title">
+    <a class="post-title-link" href="http://valarmorghulis.io/tech/201701-mongodb-join-query-with-aggregate/">Mongodb(via MongoEngine) join query with aggregate</a>
+  </div>
+      <div class="tags">tags:</br>
+        <a class="tag-link" href="/tags/mongodb">mongodb </a>
+    </div>
+    <div class="content-full">
+
+<p>Since Mongodb 3.2 and MongoEngine 0.9, we can use $aggregate command to perform join queries on multiple collections in a database. This post would be a simple tutorial for join queries on Mongodb(via MongoEngine in Python) with examples.</p>
+
+<h2 id="models-setup">Models Setup</h2>
+
+<p>Let&rsquo;s consider models defined as below:</p>
+
+<pre><code>import random
+import mongoengine
+
+
+class User(mongoengine.Document):
+    meta = {&quot;indexes&quot;: ['rnd']}
+    name = mongoengine.StringField()
+    rnd = mongoengine.FloatField(default=random.random)
+
+
+class Group(mongoengine.Document):
+    meta = {&quot;indexes&quot;: ['rnd']}
+    name = mongoengine.StringField()
+    rnd = mongoengine.FloatField(default=random.random)
+
+
+class Relation(mongoengine.Document):
+    meta = {&quot;indexes&quot;: ['user_id', 'group_id']}
+    user_id = mongoengine.ObjectIdField()
+    group_id = mongoengine.ObjectIdField()
+</code></pre>
+
+<p>Note:</p>
+
+<ul>
+<li>User and Group documents will be generated randomly.</li>
+<li>rnd fields in User and Group, are used for efficiently pick a random document.</li>
+<li>Relation documents are matched by randomly picking (User, Group) pairs.</li>
+</ul>
+
+<h2 id="join-queries">Join Queries</h2>
+
+<p>Based on the <a href="https://docs.mongodb.com/manual/reference/operator/aggregation/">Mongodb official document</a>, aggregation enables pipelining several operators on the original data from a collection. From MongoEngine you may use aggregation via</p>
+
+<pre><code>cursor = SomeDocumentClass.objects.aggregate(*pipelines)
+</code></pre>
+
+<p>where <em>pipelines</em> is a list of stages defined by a dict(the keys of the dict can be found via <a href="https://docs.mongodb.com/manual/reference/operator/aggregation-pipeline/">the document</a>). And let&rsquo;s run a few examples.</p>
+
+<h3 id="join-user-and-relation">Join User and Relation</h3>
+
+<p>The join is powered by the <strong>$lookup</strong> operator.</p>
+
+<pre><code>curosr = User.objects.aggregate(*[
+         {
+          '$lookup': {
+              'from': Relation._get_collection_name(),
+              'localField': '_id',
+              'foreignField': 'user_id',
+              'as': 'relation'}
+         }])
+</code></pre>
+
+<p>A object from the result set would be like</p>
+
+<pre><code>{
+ '_id': ObjectId('58725790958bee0e467d12fe'),
+ 'rnd': 0.4821115717624539,
+ 'relation': [
+     {
+      'user_id': ObjectId('58725790958bee0e467d12fe'),
+      '_id': ObjectId('58725790958bee0e467d12ff'),
+      'group_id': ObjectId('58725790958bee0e467d12e4')
+     }
+ ],
+ 'name': 'user_sqkXPqverW'}
+</code></pre>
+
+<h3 id="use-unwind-to-deal-with-list">Use $unwind to deal with list</h3>
+
+<p>You may have noticed from above results, the <em>relation</em> in a result object was a list since there may be one-to-many mapping. The $unwind will let you expand the list. And remember that aggregate is an pipeline, so we just append $unwind operators behind.</p>
+
+<pre><code>curosr = User.objects.aggregate(*[
+         {
+          '$lookup': {
+              'from': Relation._get_collection_name(),
+              'localField': '_id',
+              'foreignField': 'user_id',
+              'as': 'relation'},
+          '$unwind': {
+              '$unwind': &quot;$relation&quot;}
+         }])
+</code></pre>
+
+<p>And from the results, you will notice that <em>relation</em> became a dict:</p>
+
+<pre><code>{
+ '_id': ObjectId('58725790958bee0e467d12fe'),
+ 'rnd': 0.4821115717624539,
+ 'relation': {
+      'user_id': ObjectId('58725790958bee0e467d12fe'),
+      '_id': ObjectId('58725790958bee0e467d12ff'),
+      'group_id': ObjectId('58725790958bee0e467d12e4')
+     },
+ 'name': 'user_sqkXPqverW'}
+</code></pre>
+
+<h3 id="join-more-collections-user-relation-and-group">Join more collections: User, Relation and Group</h3>
+
+<p>Join more collections are pretty simple, you can just append more <em>$lookup</em> operators in the pipeline.</p>
+
+<pre><code>cursor = User.objects.aggregate(*[
+             {'$lookup': {'from': Relation._get_collection_name(),
+                          'localField': '_id',
+                          'foreignField': 'user_id',
+                          'as': 'relation'}},
+             {'$unwind': &quot;$relation&quot;},
+             {'$lookup': {'from': Group._get_collection_name(),
+                          'localField': 'relation.group_id',
+                          'foreignField': '_id',
+                          'as': 'group'}},
+             {'$unwind': &quot;$group&quot;},
+         ])
+</code></pre>
+
+<p>And in result objects, there would be <em>group</em> object:</p>
+
+<pre><code>{
+ 'group': {
+     '_id': ObjectId('58725790958bee0e467d12e4'),
+     'rnd': 0.9648027926390293,
+     'name': 'group_xgsYceERw'
+ },
+ '_id': ObjectId('58725790958bee0e467d12fe'),
+ 'rnd': 0.4821115717624539,
+ 'relation': {
+     'user_id': ObjectId('58725790958bee0e467d12fe'),
+     '_id': ObjectId('58725790958bee0e467d12ff'),
+     'group_id': ObjectId('58725790958bee0e467d12e4')},
+     'name': 'user_sqkXPqverW'
+ }
+</code></pre>
+
+<h2 id="several-notes">Several Notes</h2>
+
+<h3 id="objectid-field">ObjectId Field</h3>
+
+<p>You should use ObjectId to perform join with other collection&rsquo;s _id field(which is also an ObjectId), Mongodb can not do type conversion from ObjectId to string(or vice vesa) in a aggregation query.</p>
+
+<p>There are several issues on Mongodb official jira addressing the problem(<a href="https://jira.mongodb.org/browse/SERVER-11400">SERVER-11400</a>, <a href="https://jira.mongodb.org/browse/SERVER-22781">SERVER-22781</a>, <a href="https://jira.mongodb.org/browse/SERVER-24947">SERVER-24947</a>).</p>
+
+</div>
+        <div class="navbar">
+        <ul class="navbar-list" style="float:right">
+        </ul>
+    </div>
+    <div class="copyright"><p>&copy; 2017. ValarMorghulis.IO. All rights reserved. 
+      </p>
+    </div>    
+
+</div>
+</body>
+</html>
+
